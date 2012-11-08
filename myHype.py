@@ -52,16 +52,9 @@ class Downloader(threading.Thread):
             self.save_file(response, filename, self.update)
 
     def request_song_url(self, song):
-        host = 'http://hypem.com/serve/source/'
-        sid, key = song['id'], song['key']
-        request = urlparse.urljoin(host, sid + '/' +  key + '?_=' + str(int(time.time()*1000)))
-        headers = {
-            'X-Requested-With':'XMLHttpRequest',
-            'Referer':'http://hypem.com/popular',
-            'Host':'hypem.com',
-        }
+        url = 'http://hypem.com/serve/source/' +  song['id'] + '/' +  song['key']
         for i in range(3):
-            response = self.session.get(request, headers=headers)
+            response = self.session.get(url)
             if response.status_code != 404:
                 break
             time.sleep(1)
