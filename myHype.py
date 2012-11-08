@@ -1,115 +1,104 @@
 #!/usr/bin/env python
 from __future__ import division
-import sys
-import json
-import time
+import sys, json, time, threading, urlparse
 
 from bs4 import BeautifulSoup
 import requests
-import threading
+
+EXTENSION_MAP = {'audio/mpeg' : 'mp3'}
 
 class Scraper(object):
-    extension_map = {
-        'audio/mpeg' : 'mp3',
-    }
-
+    "Gets a list of songs that could be downloaded, and manages their downloads through spawning DL threads"
+    
     def __init__(self, path='popular/'):
-        self.path = path
-        self.get_songs()
+        self.get_songs(path)
 
-    def get_page(self):
+    def get_page(self, path):
         headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.15 (KHTML, like Gecko) Chrome/24.0.1295.0 Safari/537.15'}
         self.session = requests.session()
-        req = self.session.get('http://www.hypem.com/'+self.path, headers=headers)
+        req = self.session.get(urlparse.urljoin('http://www.hypem.com/', path), headers=headers)
         return req.text
 
-    def get_songs(self):
-        results = BeautifulSoup(self.get_page())
+    def get_songs(self, path):
+        results = BeautifulSoup(self.get_page(path))
         song_map = {}
-        page_data = json.loads(results.find('script', id='displayList-data').get_text())['tracks']
-        self.song_list = []
-        for i, track in enumerate(page_data):
-            song = {}
-            atts_we_want = ['artist', 'key', 'id', 'song']
-            song = {att: track[att] for att in atts_we_want}
-            song['rank'] = i + 1
-            self.song_list.append(song)
+        self.song_list = json.loads(results.find('script', id='displayList-data').get_text())['tracks']
+        [track.__setitem__('rank', i+1) for i, track in enumerate(self.song_list)]
 
-    def request_song_url(self, song):
-        host = 'http://hypem.com/serve/source/'
-        sid = song['id']
-        key = song['key']
-        t = str(int(time.time()*1000))
-        request = host + sid + '/' + key + '?_=' + t
-        headers = {
-            'X-Requested-With':'XMLHttpRequest',
-            'Referer':'http://hypem.com/popular',
-            'Host':'hypem.com',
-        }
-        response = self.session.get(request, headers=headers)
-        if response.status_code == 404:
-            time.sleep(1)
-            if self.session.get(request, headers=headers).status_code == 404:
-                raise requests.HTTPError
-        return response.json['url']
-
-    #filer
-    def get_song_file(self, song):
-        return self.session.get(self.request_song_url(song), prefetch=False), song['song']
-
-    #saver
-    def save_file(self, resp, filename, updater=None):
-        ext = self.extension_map[resp.headers['content-type']]
-        size = int(resp.headers['content-length'])
-        f = open(filename + '.' + ext, 'w')
-        bytes_read = 0
-        while bytes_read < size:
-            data = resp.raw.read(min(1024*64, size-bytes_read))
-            bytes_read += len(data)
-            f.write(data)
-            if updater:
-                updater(bytes_read/size)
-            else:
-                sys.stdout.write('%.f%%' % (bytes_read/size*100) + ' done\r')
-                sys.stdout.flush()
-        print
-        f.close()
+    def download(self, song_numbers):
+        [Downloader(self.song_list[selected], self.session).start() for selected in song_numbers]
+        Downloader.printer()
 
 class Downloader(threading.Thread):
     tracker = {}
 
-    def __init__(self, filer, saver, song):
+    def __init__(self, song, session):
         threading.Thread.__init__(self)
-        self.song = song
-        self.filer = filer
-        self.saver = saver
+        self.song, self.session = song, session
         self.tracker[self.song['song']] = 0
+        self.daemon = True
 
     def update(self, percent):
         self.tracker[self.song['song']] = percent
 
     def run(self):
         try:
-            response, filename = self.filer(self.song)
+            response, filename = self.get_song_file(self.song)
         except requests.HTTPError:
             print 'Sorry dude. ' + self.song['song'] + ' is not available.'
             self.tracker[self.song['song']] = -1
             print self.tracker
         else:
-            self.saver(response, filename, self.update)
+            self.save_file(response, filename, self.update)
+
+    def request_song_url(self, song):
+        host = 'http://hypem.com/serve/source/'
+        sid, key = song['id'], song['key']
+        request = urlparse.urljoin(host, sid + '/' +  key + '?_=' + str(int(time.time()*1000)))
+        headers = {
+            'X-Requested-With':'XMLHttpRequest',
+            'Referer':'http://hypem.com/popular',
+            'Host':'hypem.com',
+        }
+        for i in range(3):
+            response = self.session.get(request, headers=headers)
+            if response.status_code != 404:
+                break
+            time.sleep(1)
+        else:
+            raise requests.HTTPError
+        return response.json['url']
+
+    def get_song_file(self, song):
+        """Returns song file object, used as 'filer' in thread"""
+        return self.session.get(self.request_song_url(song), prefetch=False), song['song']
+
+    def save_file(self, resp, filename, updater=None):
+        """Returns song file object, used as 'saver' """
+        size = int(resp.headers['content-length'])
+        f = open(filename + '.' + EXTENSION_MAP[resp.headers['content-type']], 'w')
+        bytes_read = 0
+        while bytes_read < size:
+            data = resp.raw.read(min(1024*64, size-bytes_read))
+            bytes_read += len(data)
+            f.write(data)
+            updater(bytes_read/size)
+        f.close()
 
     @classmethod
     def printer(kls):
         while any([abs(v) != 1 for v in kls.tracker.values()]):
             for k,v in kls.tracker.items():
                 if abs(v) != 1:
-                    print k + ': ' + '%.f%%' % (v*100) + ' done\r'
+                    sys.stdout.write( ' || '.join(['%s: %.f%% done' % (k, v*100) for k, v in kls.tracker.items() if v != -1]) + '\r')
+                    sys.stdout.flush()
                     time.sleep(.1)
+        print
 
 def CLI():
     path = None
     if len(sys.argv) > 1:
-        path = '/search/%s/' % sys.argv[1]
+        path = '/search/%s/' % ' '.join(sys.argv[1:])
         scraper = Scraper(path)
     else:
         scraper = Scraper()
@@ -118,18 +107,7 @@ def CLI():
 
     selections = raw_input('What numbers would you like to download? ')
     parsed = [int(x.strip())-1 for x in selections.split(',')]
-
-    # for selected in parsed:
-    #     print 'Downloading ' + scraper.song_list[selected]['artist'] + ' - ' +scraper.song_list[selected]['song']
-    #     scraper.save_file(*scraper.get_song_file(scraper.song_list[selected]))
-
-    threads = []
-    for selected in parsed:
-        newth = Downloader(scraper.get_song_file, scraper.save_file, scraper.song_list[selected])
-        threads.append(newth)
-        newth.start()
-
-    Downloader.printer()
+    scraper.download(parsed)
 
 if __name__ == '__main__':
     CLI()
