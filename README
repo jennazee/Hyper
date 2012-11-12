@@ -3,4 +3,16 @@ Hyper
 *********
 Modules required: BeautifulSoup, requests
 
-Queries are taken through arguments after the method call. If there is no query attached, the search will default to the trending songs at 'hypem.com/popular'
+Defaults to Popular HypeM songs on running the script.
+
+To run the application 
+
+```python myHype.py```
+
+If you would like to search a particular artist or song
+
+```python myHype.py Beatles```
+
+If you would like to serach by hypem username
+
+```python myHype.py user: username```
