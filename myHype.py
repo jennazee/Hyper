@@ -11,7 +11,7 @@ class Scraper(object):
     "Gets a list of songs that could be downloaded, and manages their downloads through spawning DL threads"
     
     def __init__(self, path='popular/'):
-        self.get_songs(path)
+        self.get_songs(path)    
 
     def get_page(self, path):
         headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.15 (KHTML, like Gecko) Chrome/24.0.1295.0 Safari/537.15'}
@@ -89,11 +89,15 @@ class Downloader(threading.Thread):
                     time.sleep(.1)
         print
 
+
 def CLI():
-    path = None
     if len(sys.argv) > 1:
-        path = '/search/%s/' % ' '.join(sys.argv[1:])
+        if sys.argv[1] == 'user:':
+            path = '/' + sys.argv[2]
+        else:
+            path = '/search/%s/' % ' '.join(sys.argv[1:])
         scraper = Scraper(path)
+
     else:
         scraper = Scraper()
     if len(scraper.song_list) == 0:
