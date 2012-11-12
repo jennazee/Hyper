@@ -45,9 +45,8 @@ class Downloader(threading.Thread):
         try:
             response, filename = self.get_song_file(self.song)
         except requests.HTTPError:
-            print 'Sorry dude. ' + self.song['song'] + ' is not available.'
+            print '\nSorry, "' + self.song['song'] + '" is not available.'
             self.tracker[self.song['song']] = -1
-            print self.tracker
         else:
             self.save_file(response, filename, self.update)
 
@@ -64,11 +63,13 @@ class Downloader(threading.Thread):
 
     def get_song_file(self, song):
         """Returns song file object, used as 'filer' in thread"""
-        return self.session.get(self.request_song_url(song), prefetch=False), song['song']
+        return self.session.get(self.request_song_url(song), prefetch=False), song['artist']+ ' - ' +song['song']
 
     def save_file(self, resp, filename, updater=None):
         """Returns song file object, used as 'saver' """
         size = int(resp.headers['content-length'])
+        if '/' in filename:
+            filename = filename.replace('/', '-')
         f = open(filename + '.' + EXTENSION_MAP[resp.headers['content-type']], 'w')
         bytes_read = 0
         while bytes_read < size:
@@ -95,8 +96,12 @@ def CLI():
         scraper = Scraper(path)
     else:
         scraper = Scraper()
-    for song in scraper.song_list:
-        print str(song['rank']) + ') ' + song['artist']+ ' - ' +song['song']
+    if len(scraper.song_list) == 0:
+        print 'Sorry, there are no songs matching your request'
+        return
+    else:
+        for song in scraper.song_list:
+            print str(song['rank']) + ') ' + song['artist']+ ' - ' +song['song']
 
     selections = raw_input('What numbers would you like to download? ')
     parsed = [int(x.strip())-1 for x in selections.split(',')]
