@@ -5,7 +5,7 @@ import sys, json, time, threading, urlparse
 from bs4 import BeautifulSoup
 import requests
 
-EXTENSION_MAP = {'audio/mpeg' : 'mp3'}
+EXTENSION_MAP = {'audio/mpeg' : 'mp3', 'audio/mp4': 'mp4', 'audio/vnd.wave': 'wav'}
 
 class Scraper(object):
     "Gets a list of songs that could be downloaded, and manages their downloads through spawning DL threads"
@@ -70,7 +70,12 @@ class Downloader(threading.Thread):
         size = int(resp.headers['content-length'])
         if '/' in filename:
             filename = filename.replace('/', '-')
-        f = open(filename + '.' + EXTENSION_MAP[resp.headers['content-type']], 'w')
+        try:
+            ext = EXTENSION_MAP[resp.headers['content-type']]
+        except KeyError:
+            print "The file type for " + filename + "was not recognized. We're going to assume it's an mp3."
+            ext = 'mp3'
+        f = open(filename + '.' + ext, 'w')
         bytes_read = 0
         while bytes_read < size:
             data = resp.raw.read(min(1024*64, size-bytes_read))
