@@ -73,7 +73,7 @@ class Downloader(threading.Thread):
         try:
             ext = EXTENSION_MAP[resp.headers['content-type']]
         except KeyError:
-            print "The file type for " + filename + "was not recognized. We're going to assume it's an mp3."
+            print "The file type for " + filename + " was not recognized. We're going to assume it's an mp3."
             ext = 'mp3'
         f = open(filename + '.' + ext, 'w')
         bytes_read = 0
