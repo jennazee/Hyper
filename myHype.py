@@ -38,8 +38,8 @@ class Downloader(threading.Thread):
         self.tracker[self.song['song']] = 0
         self.daemon = True
 
-    def update(self, percent):
-        self.tracker[self.song['song']] = percent
+    def update(self, done, size):
+        self.tracker[self.song['song']] = done/size
 
     def run(self):
         try:
@@ -67,21 +67,37 @@ class Downloader(threading.Thread):
 
     def save_file(self, resp, filename, updater=None):
         """Returns song file object, used as 'saver' """
-        size = int(resp.headers['content-length'])
         if '/' in filename:
             filename = filename.replace('/', '-')
         try:
             ext = EXTENSION_MAP[resp.headers['content-type']]
         except KeyError:
-            print "The file type for " + filename + " was not recognized. We're going to assume it's an mp3."
+            print "The file type for '" + filename + "' was not recognized. We're going to assume it's an mp3.\n"
             ext = 'mp3'
         f = open(filename + '.' + ext, 'w')
         bytes_read = 0
-        while bytes_read < size:
-            data = resp.raw.read(min(1024*64, size-bytes_read))
-            bytes_read += len(data)
-            f.write(data)
-            updater(bytes_read/size)
+        try:
+            size = int(resp.headers['content-length'])
+        except TypeError:
+            print "The size of '" + filename + "' is unknown. Sorry we can't show you progress."
+            size = 0;
+
+        if size > 0:
+            while bytes_read < size:
+                data = resp.raw.read(min(1024*64, size-bytes_read))
+                bytes_read += len(data)
+                f.write(data)
+                updater(bytes_read, size)
+        else:
+            updater(0, 1)
+            read = 1024*64
+            while read == 1024*64:
+                data = resp.raw.read(1024*64)
+                read = len(data)
+                bytes_read += read
+                f.write(data)
+            updater(1,1)
+                
         f.close()
 
     @classmethod
