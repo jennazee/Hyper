@@ -1,10 +1,9 @@
-**********
+
 HYPER
-*********
+-----------
 Modules required: BeautifulSoup, requests
 
-COMMAND LINE INTERFACE (CLI)
----------------------------------
+### COMMAND LINE INTERFACE (CLI)
 Defaults to scraping the 'Popular' Hype Machine (hypem.com) songs when the script is run.
 
 To run the application, with the aforementioned default
@@ -23,6 +22,5 @@ If you would like to serach by hypem username
 After choosing the desired song selections, the script shows the progress of each download, exiting when all requested songs have finished downloading.
 
 
-DESIGN
------------------
+### DESIGN
 This script uses 'threading' to download requested songs simultaneously
